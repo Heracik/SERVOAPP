@@ -15,8 +15,7 @@ def main():
             "forget to activate a virtual environment?"
         ) from exc
 
-    #mqtt_thread = threading.Thread(target=start_mqtt, daemon=True)
-    #mqtt_thread.start()
+    
 
     execute_from_command_line(sys.argv)
 
