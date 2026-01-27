@@ -1,7 +1,7 @@
 import os
 import sys
 import threading
-from mqtt_thread import start_mqtt
+#from mqtt_thread import start_mqtt
 
 def main():
     """Run administrative tasks."""
