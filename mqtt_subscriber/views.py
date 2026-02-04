@@ -53,7 +53,7 @@ def get_time_for_city(city, timezone):
         city_time = datetime.now(tz).strftime("%H:%M")
         return city_time
     except pytz.UnknownTimeZoneError:
-        return None  #
+        return None  
 
 def send_time_for_city(request, city, timezone):
     

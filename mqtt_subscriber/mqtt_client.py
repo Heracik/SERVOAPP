@@ -35,7 +35,7 @@ def mqtt_thread():
 threading.Thread(target=mqtt_thread, daemon=True).start()
 
 def send_queued_messages():
-    """Odosiela správy z fronty po jednej, keď je MQTT pripojený."""
+    
     global client, message_queue
 
     while client and client.is_connected and message_queue:
@@ -45,7 +45,7 @@ def send_queued_messages():
         time.sleep(1)
 
 def get_city_time(city):
-    """Získa aktuálny čas pre dané mesto."""
+    
     city_timezones = {
     'bakerisland': 'Etc/GMT+12',
     'pagopago': 'Pacific/Pago_Pago',
@@ -76,7 +76,7 @@ def get_city_time(city):
     
 
     if city not in city_timezones:
-        return None  # Ak mesto nie je v zozname, vráti None
+        return None  
 
     timezone = pytz.timezone(city_timezones[city])
     city_time = datetime.now(timezone).strftime("%H:%M")
