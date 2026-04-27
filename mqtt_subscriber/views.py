@@ -7,11 +7,12 @@ from gmqtt import Client as MQTTClient
 from django.views.decorators.csrf import csrf_exempt
 import json
 import asyncio
-import logging
+
 
 #broker.emqx.io
 #broker.hivemq.com
 #test.mosquitto.org
+#https://mqttx.app/web-client#/recent_connections/8e89b2bd-7f08-474c-ad7c-02a3aa9f7c05
 
 cities_timezones = {
     'bakerisland': 'Etc/UTC-12:00',
@@ -41,38 +42,41 @@ cities_timezones = {
 }
 
 
+# nacitanie mest
 def home(request):
-    
     capitalized_cities_timezones = {city.capitalize(): timezone for city, timezone in cities_timezones.items()}
     return render(request, 'mqtt_subscriber/home.html', {'cities_timezones': capitalized_cities_timezones})
 
 
+# zistenie aktualneho casu
 def get_time_for_city(city, timezone):
     try:
         tz = pytz.timezone(timezone)
         city_time = datetime.now(tz).strftime("%H:%M")
         return city_time
     except pytz.UnknownTimeZoneError:
-        return None  
+        return None
 
+
+# odoslanie mesta
 def send_time_for_city(request, city, timezone):
-    
     city_time = get_time_for_city(city, timezone)
     
     if city_time:
-        
-        send_current_time(city)  
+        send_current_time(city)
         return JsonResponse({'message': f'Čas pre {city.capitalize()} ({timezone}) bol úspešne odoslaný! Čas: {city_time}'})
     else:
         return JsonResponse({'message': 'Nastala chyba pri získavaní času pre vybrané mesto a časové pásmo.'}, status=400)
 
+
+# odoslanie mesta
 def send_time(request, city):
     send_current_time(city)
     return JsonResponse({'message': f'Time for {city} has been sent successfully!'})
 
 
+# mqqt odoslanie vlastneho casu
 async def send_mqtt_message(custom_time):
-    
     client = MQTTClient("django_client")
 
     
@@ -80,15 +84,12 @@ async def send_mqtt_message(custom_time):
         print(f"Pripojenie úspešné, kód: {rc}")
 
     try:
-        
         await client.connect('broker.emqx.io', 1883)
         print("Pripojené k MQTT brokeru")
 
-       
         topic = "esp32/projekt1"
         message = f"{custom_time}"
 
-        
         await client.publish(topic, message)
         print(f"Správa '{message}' odoslaná do témy '{topic}'")
 
@@ -98,29 +99,29 @@ async def send_mqtt_message(custom_time):
         print(f"Chyba pri odosielaní do MQTT: {e}")
         raise
 
+#custom time
 @csrf_exempt
 async def send_custom_time(request):
     if request.method == 'POST':
         try:
-            
+            # Načíta JSON telo požiadavky a získa hodnotu 'time'
             data = json.loads(request.body)
             custom_time = data.get('time')
 
-            
+            # Overí, či bol čas skutočne zadaný
             if not custom_time:
                 return JsonResponse({"message": "Chýba hodnota 'time'."}, status=400)
 
-            
             await send_mqtt_message(custom_time)
 
             return JsonResponse({"message": f"Vlastný čas {custom_time} bol odoslaný na MQTT!"})
         except Exception as e:
-            
             print(f"Chyba pri odosielaní vlastného času: {e}")
             return JsonResponse({"message": "Nastala chyba pri odosielaní času."}, status=500)
 
     return JsonResponse({"message": "Nesprávna požiadavka!"}, status=400)
 
+#vypnutie hodin
 async def send_shutdown_command():
     client = MQTTClient("shutdown-client")
 
@@ -136,11 +137,12 @@ async def send_shutdown_command():
         print(f"Chyba pri odosielaní príkazu na vypnutie: {e}")
         raise
 
+
+# view na vypnite
 @csrf_exempt
 def send_shutdown_command_view(request):
     if request.method == 'POST':
         try:
-            
             asyncio.run(send_shutdown_command())
             return JsonResponse({'status': 'success', 'message': 'Príkaz na vypnutie bol odoslaný!'})
         except Exception as e:
@@ -150,6 +152,7 @@ def send_shutdown_command_view(request):
     return JsonResponse({'status': 'error', 'message': 'Nesprávna požiadavka!'}, status=400)
 
 
+# synhro
 async def send_sync_command():
     client = MQTTClient("sync-client")
 
@@ -165,6 +168,8 @@ async def send_sync_command():
         print(f"Chyba pri odosielaní príkazu na synchronizáciu: {e}")
         raise
 
+
+# view snyhro
 @csrf_exempt
 def send_sync_command_view(request):
     if request.method == 'POST':
@@ -177,6 +182,8 @@ def send_sync_command_view(request):
 
     return JsonResponse({'status': 'error', 'message': 'Nesprávna požiadavka!'}, status=400)
 
+
+# desynhro
 async def send_desync_command():
     client = MQTTClient("desync-client")
 
@@ -192,6 +199,8 @@ async def send_desync_command():
         print(f"Chyba pri odosielaní príkazu na desynchronizáciu: {e}")
         raise
 
+
+# view desynchro
 @csrf_exempt
 def send_desync_command_view(request):
     if request.method == 'POST':

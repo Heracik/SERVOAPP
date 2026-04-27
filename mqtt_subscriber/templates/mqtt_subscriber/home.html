@@ -9,10 +9,12 @@
     <link rel="icon" type="image/png" href="{% static 'mqtt_subscriber/segment.png' %}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script>
+        //výber mesta
         function openCityModal() {
             document.getElementById("cityModal").style.display = "block";
         }
     
+        //vlastný čas
         function openTimeModal() {
             document.getElementById("timeModal").style.display = "block";
         }
@@ -22,7 +24,9 @@
             document.getElementById("timeModal").style.display = "none";
         }
     
+        //odoslanie mesta
         function sendTimeForCity(city) {
+            disableAutomation();
             console.log(`Odosielam čas pre mesto: ${city}`);
             fetch(`/send_time/${city}/`)
                 .then(response => response.json())
@@ -38,7 +42,9 @@
                 });
         }
     
+        //odoslanie casu
         function sendCustomTime() {
+            disableAutomation();
             const customTime = document.getElementById("customTime").value;
     
             if (!customTime) {
@@ -62,9 +68,143 @@
                 closeModal();
             });
         }
+
+        // ===================== AUTOMATICKÉ OVLÁDANIE =====================
+let automationEnabled = false;
+let automationInterval = null;
+
+function updateAutoButton() {
+    const autoBtn = document.getElementById('autoBtn');
+    const autoIcon = document.getElementById('autoIcon');
+    
+    if (automationEnabled) {
+        autoBtn.classList.add('active');
+        autoIcon.textContent = '✓';
+    } else {
+        autoBtn.classList.remove('active');
+        autoIcon.textContent = '✗';
+    }
+}
+
+function checkAutomationTime() {
+    if (!automationEnabled) return;
+    
+    // Ziskame aktualny cas v Bratislave
+    const now = new Date();
+    const bratislavaTime = new Date(now.toLocaleString("en-US", {timeZone: "Europe/Bratislava"}));
+    const hours = bratislavaTime.getHours();
+    const minutes = bratislavaTime.getMinutes();
+    
+    // O 7:30 zapnut hodiny (synchronizovat)
+    if (hours === 7 && minutes === 30) {
+        console.log('Automaticke zapnutie hodin o 7:30');
+        fetch("/send_sync/", { method: "POST" })
+            .then(() => showCustomMessage('Automaticke zapnutie hodin o 7:30', 'success'))
+            .catch(err => console.error('Chyba pri automatickom zapnuti:', err));
+    }
+    
+    // O 15:00 vypnut hodiny
+    if (hours === 15 && minutes === 0) {
+        console.log('Automaticke vypnutie hodin o 15:00');
+        fetch("/send_shutdown/", { method: "POST" })
+            .then(() => showCustomMessage('Automaticke vypnutie hodin o 15:00', 'success'))
+            .catch(err => console.error('Chyba pri automatickom vypnuti:', err));
+    }
+}
+
+function toggleAutomation() {
+    automationEnabled = !automationEnabled;
+    
+    if (automationEnabled) {
+        // Spustíme kontrolu každú minútu
+        automationInterval = setInterval(checkAutomationTime, 60000);
+        // Hneď skontrolujeme
+        checkAutomationTime();
+        showCustomMessage('Automaticke ovladanie bolo zapnute. Hodiny sa zapnu o 7:30 a vypnu o 15:00', 'success');
+        
+        // Uložíme stav do localStorage
+        localStorage.setItem('automationEnabled', 'true');
+    } else {
+        // Zastavíme interval
+        if (automationInterval) {
+            clearInterval(automationInterval);
+            automationInterval = null;
+        }
+        showCustomMessage('Automatické ovládanie bolo vypnuté.', 'success');
+        localStorage.setItem('automationEnabled', 'false');
+    }
+    
+    updateAutoButton();
+}
+
+// Vypnutie automatizácie pri manuálnej akcii
+function disableAutomation() {
+    if (automationEnabled) {
+        automationEnabled = false;
+        if (automationInterval) {
+            clearInterval(automationInterval);
+            automationInterval = null;
+        }
+        localStorage.setItem('automationEnabled', 'false');
+        updateAutoButton();
+    }
+}
+
+
+
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Pridaj event listener pre tlacidlo automatizacie
+    document.getElementById('autoBtn').addEventListener('click', toggleAutomation);
+    
+    // Obnov stav z localStorage
+    const savedState = localStorage.getItem('automationEnabled');
+    if (savedState === 'true') {
+        automationEnabled = true;
+        automationInterval = setInterval(checkAutomationTime, 60000);
+    }
+    updateAutoButton();
+});
+
     </script>
 </head>
 <body>
+
+    <!-- ===================== ADMIN LOGIN OVERLAY ===================== -->
+    <div id="adminOverlay" style="position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 9999; display: flex; align-items: center; justify-content: center;">
+        <div style="background: white; border-radius: 16px; padding: 2rem 2.5rem; width: 340px; max-width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,0.4);">
+            <div style="text-align: center; margin-bottom: 1.5rem;">
+                <div style="font-size: 2.5rem; margin-bottom: 0.75rem;">🔒</div>
+                <h2 style="margin: 0 0 4px; font-size: 20px; font-weight: 600; color: #1a1a1a;">Servo Hodiny</h2>
+                <p style="margin: 0; font-size: 13px; color: #666;">Prihláste sa pre prístup k ovládaniu</p>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                <div>
+                    <label style="font-size: 12px; color: #555; display: block; margin-bottom: 4px;">Meno</label>
+                    <input type="text" id="adminUsername" placeholder="admin"
+                        style="width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; box-sizing: border-box; outline: none;"
+                        onkeydown="if(event.key==='Enter') doLogin()" />
+                </div>
+                <div>
+                    <label style="font-size: 12px; color: #555; display: block; margin-bottom: 4px;">Heslo</label>
+                    <input type="password" id="adminPassword" placeholder="••••••••"
+                        style="width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; box-sizing: border-box; outline: none;"
+                        onkeydown="if(event.key==='Enter') doLogin()" />
+                </div>
+                <div id="loginError" style="display: none; font-size: 12px; color: #c0392b; background: #fdecea; padding: 8px 12px; border-radius: 8px;">
+                    ❌ Nesprávne meno alebo heslo.
+                </div>
+                <button onclick="doLogin()"
+                    style="margin-top: 4px; padding: 11px; font-size: 15px; font-weight: 600; background: #2c3e50; color: white; border: none; border-radius: 8px; cursor: pointer; transition: background 0.2s;"
+                    onmouseover="this.style.background='#3d5166'"
+                    onmouseout="this.style.background='#2c3e50'">
+                    Prihlásiť sa
+                </button>
+            </div>
+        </div>
+    </div>
+    <!-- ===================== KONIEC LOGIN OVERLAY ===================== -->
+
     <div class="container">
         
         <header class="header">
@@ -76,28 +216,37 @@
             </div>
         </header>
 
-       
         <main class="main-content">
             
             <section class="control-panel">
                 <h2>Ovládací Panel</h2>
                 <div class="button-grid">
+                    
                     <button class="btn btn-primary" onclick="openCityModal()">
                         <span class="btn-icon">🌍</span>
                         Synchronizovať podľa mesta
                     </button>
+                    
                     <button class="btn btn-secondary" onclick="openTimeModal()">
                         <span class="btn-icon">⏰</span>
                         Nastaviť vlastný čas
                     </button>
+                    
                     <button class="btn btn-sync" id="syncBtn">
                         <span class="btn-icon">🔄</span>
                         Synchronizovať
                     </button>
+
+                    <button class="btn btn-auto" id="autoBtn">
+                        <span class="btn-icon" id="autoIcon">✗</span>
+                        <span>Automatické ovládanie</span>
+                    </button>
+                    
                     <button class="btn btn-desync" id="desyncBtn">
                         <span class="btn-icon">⏸️</span>
                         Desynchronizovať
                     </button>
+                   
                     <button class="btn btn-danger" id="shutdownBtn">
                         <span class="btn-icon">⚡</span>
                         Vypnúť hodiny
@@ -105,7 +254,6 @@
                 </div>
             </section>
 
-            
             <section class="project-description">
                 <h2>O Projekte</h2>
                 <div class="description-content">
@@ -132,7 +280,6 @@
             </section>
         </main>
 
-      
         <footer class="footer">
             <div class="footer-content">
                 <div class="footer-section">
@@ -160,7 +307,7 @@
             </div>
         </footer>
 
-    
+    <!-- popup na mesta-->
     <div id="cityModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -180,6 +327,7 @@
         </div>
     </div>
 
+    <!-- popup vlastny cas-->
     <div id="timeModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -196,7 +344,7 @@
         </div>
     </div>
 
-    
+    <!-- confirm -->
     <div id="confirmModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -217,73 +365,125 @@
 
     <script>
 
-function showCustomMessage(message, type = 'success') {
-    
-    const existingMessages = document.querySelectorAll('.custom-error, .custom-success');
-    existingMessages.forEach(msg => msg.remove());
-    
-    
-    const messageDiv = document.createElement('div');
-    messageDiv.className = type === 'error' ? 'custom-error' : 'custom-success';
-    messageDiv.textContent = message;
-    messageDiv.style.display = 'block';
-    
-    
-    const header = document.querySelector('.header');
-    header.insertAdjacentElement('afterend', messageDiv);
-    
-    
-    setTimeout(() => {
-        messageDiv.style.opacity = '0';
-        setTimeout(() => messageDiv.remove(), 300);
-    }, 5000);
-}
+    // ===================== ADMIN LOGIN =====================
 
-function setButtonLoading(button, loading) {
-    if (loading) {
-        button.classList.add('loading');
-        button.disabled = true;
-    } else {
-        button.classList.remove('loading');
-        button.disabled = false;
+
+    
+    const ADMIN_CREDENTIALS = {
+        'Misko1': 'Sutek1',
+        'Socka2026': 'Hodiny2026',
+        'Filipko0' : 'Rajec0',
+        'Lukas1': 'Rudina1',
+        
+    };
+
+    function doLogin() {
+        const username = document.getElementById('adminUsername').value.trim();
+        const password = document.getElementById('adminPassword').value;
+        const errorDiv = document.getElementById('loginError');
+
+        if (ADMIN_CREDENTIALS[username] && ADMIN_CREDENTIALS[username] === password) {
+            document.getElementById('adminOverlay').style.display = 'none';
+            errorDiv.style.display = 'none';
+        } else {
+            errorDiv.style.display = 'block';
+            document.getElementById('adminPassword').value = '';
+            document.getElementById('adminPassword').focus();
+        }
     }
-}
+
+    document.addEventListener('DOMContentLoaded', function() {
+        document.getElementById('adminUsername').focus();
+    });
+    // ===================== KONIEC ADMIN LOGIN =====================
 
 
-function showConfirmModal(message, onConfirm) {
-    document.getElementById('confirmMessage').textContent = message;
-    document.getElementById('confirmModal').style.display = 'block';
-    
-    
-    window.pendingConfirmAction = onConfirm;
-}
-
-function closeConfirmModal() {
-    document.getElementById('confirmModal').style.display = 'none';
-    window.pendingConfirmAction = null;
-}
-
-function executeConfirmAction() {
-    if (window.pendingConfirmAction) {
-        window.pendingConfirmAction();
-        closeConfirmModal();
+    // upsech sprav
+    function showCustomMessage(message, type = 'success') {
+        const existingMessages = document.querySelectorAll('.custom-error, .custom-success');
+        existingMessages.forEach(msg => msg.remove());
+        
+        const messageDiv = document.createElement('div');
+        messageDiv.className = type === 'error' ? 'custom-error' : 'custom-success';
+        messageDiv.textContent = message;
+        messageDiv.style.display = 'block';
+        
+        const header = document.querySelector('.header');
+        header.insertAdjacentElement('afterend', messageDiv);
+        
+        setTimeout(() => {
+            messageDiv.style.opacity = '0';
+            setTimeout(() => messageDiv.remove(), 300);
+        }, 5000);
     }
-}
 
+    function setButtonLoading(button, loading) {
+        if (loading) {
+            button.classList.add('loading');
+            button.disabled = true;
+        } else {
+            button.classList.remove('loading');
+            button.disabled = false;
+        }
+    }
 
-function closeModal() {
-    document.getElementById("cityModal").style.display = "none";
-    document.getElementById("timeModal").style.display = "none";
-}
+    // confirm spravy
+    function showConfirmModal(message, onConfirm) {
+        document.getElementById('confirmMessage').textContent = message;
+        document.getElementById('confirmModal').style.display = 'block';
+        window.pendingConfirmAction = onConfirm;
+    }
 
+    function closeConfirmModal() {
+        document.getElementById('confirmModal').style.display = 'none';
+        window.pendingConfirmAction = null;
+    }
 
-document.getElementById("shutdownBtn").addEventListener("click", function() {
-    const button = this;
-    
-    showConfirmModal("Naozaj chcete vypnúť systém?", function() {
+    function executeConfirmAction() {
+        if (window.pendingConfirmAction) {
+            window.pendingConfirmAction();
+            closeConfirmModal();
+        }
+    }
+
+    function closeModal() {
+        document.getElementById("cityModal").style.display = "none";
+        document.getElementById("timeModal").style.display = "none";
+    }
+
+    // odoslanie vypnutia
+    document.getElementById("shutdownBtn").addEventListener("click", function() {
+        const button = this;
+        
+        showConfirmModal("Naozaj chcete vypnúť systém?", function() {
+            setButtonLoading(button, true);
+            
+            fetch("/send_shutdown/", { method: "POST" })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    showCustomMessage(data.message || 'Príkaz na vypnutie bol úspešne odoslaný', 'success');
+                })
+                .catch(error => {
+                    console.error('Chyba:', error);
+                    showCustomMessage('Príkaz na vypnutie bol úspešne odoslaný.', 'success');
+                })
+                .finally(() => {
+                    setButtonLoading(button, false);
+                });
+        });
+    });
+
+    // btn synchro
+    document.getElementById("syncBtn").addEventListener("click", function() {
+        const button = this;
         setButtonLoading(button, true);
         
-        fetch("/send_shutdown/", { method: "POST" })
+        fetch("/send_sync/", { method: "POST" })
             .then(response => {
                 if (!response.ok) {
                     throw new Error('Network response was not ok');
@@ -291,157 +491,123 @@ document.getElementById("shutdownBtn").addEventListener("click", function() {
                 return response.json();
             })
             .then(data => {
-                showCustomMessage(data.message || 'Príkaz na vypnutie bol úspešne odoslaný', 'success');
+                showCustomMessage(data.message || 'Synchronizácia bola úspešne spustená', 'success');
             })
             .catch(error => {
                 console.error('Chyba:', error);
-                showCustomMessage('Príkaz na vypnutie bol úspešne odoslaný.', 'success');
+                showCustomMessage('Synchronizácia bola úspešne spustená', 'success');
             })
             .finally(() => {
                 setButtonLoading(button, false);
             });
     });
-});
 
+    // btn desynchro
+    document.getElementById("desyncBtn").addEventListener("click", function() {
+        const button = this;
+        setButtonLoading(button, true);
+        
+        fetch("/send_desync/", { method: "POST" })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                showCustomMessage(data.message || 'Desynchronizácia bola úspešne spustená', 'success');
+            })
+            .catch(error => {
+                console.error('Chyba:', error);
+                showCustomMessage('Desynchronizácia bola úspešne spustená', 'success');
+            })
+            .finally(() => {
+                setButtonLoading(button, false);
+            });
+    });
 
-document.getElementById("syncBtn").addEventListener("click", function() {
-    const button = this;
-    setButtonLoading(button, true);
-    
-    fetch("/send_sync/", { method: "POST" })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-            return response.json();
-        })
-        .then(data => {
-            showCustomMessage(data.message || 'Synchronizácia bola úspešne spustená', 'success');
-        })
-        .catch(error => {
-            console.error('Chyba:', error);
-            showCustomMessage('Synchronizácia bola úspešne spustená', 'success');
-        })
-        .finally(() => {
-            setButtonLoading(button, false);
-        });
-});
+    document.getElementById('confirmActionBtn').addEventListener('click', executeConfirmAction);
 
-
-document.getElementById("desyncBtn").addEventListener("click", function() {
-    const button = this;
-    setButtonLoading(button, true);
-    
-    fetch("/send_desync/", { method: "POST" })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-            return response.json();
-        })
-        .then(data => {
-            showCustomMessage(data.message || 'Desynchronizácia bola úspešne spustená', 'success');
-        })
-        .catch(error => {
-            console.error('Chyba:', error);
-            showCustomMessage('Desynchronizácia bola úspešne spustená', 'success');
-        })
-        .finally(() => {
-            setButtonLoading(button, false);
-        });
-});
-
-
-document.getElementById('confirmActionBtn').addEventListener('click', executeConfirmAction);
-
-
-function sendTimeForCity(city) {
-    console.log(`Odosielam čas pre mesto: ${city}`);
-    
-    
-    const buttons = document.querySelectorAll('.city-btn');
-    const clickedButton = Array.from(buttons).find(btn => 
-        btn.textContent.toLowerCase().includes(city.toLowerCase())
-    );
-    
-    if (clickedButton) setButtonLoading(clickedButton, true);
-    
-    fetch(`/send_time/${city}/`)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-            return response.json();
-        })
-        .then(data => {
-            console.log('Odpoveď zo servera:', data);
-            
-            const cityName = city.charAt(0).toUpperCase() + city.slice(1);
-            showCustomMessage(`Čas pre mesto ${cityName} bol úspešne synchronizovaný`, 'success');
-            closeModal();
-        })
-        .catch(error => {
-            console.error('Chyba pri odosielaní:', error);
-            showCustomMessage('Synchronizácia času sa nepodarila. Skúste to neskôr.', 'error');
-            closeModal();
-        })
-        .finally(() => {
-            if (clickedButton) setButtonLoading(clickedButton, false);
-        });
-}
-
-
-function sendCustomTime() {
-    const customTime = document.getElementById("customTime").value;
-    const button = document.querySelector('#timeModal .btn-primary');
-
-    if (!customTime) {
-        showCustomMessage('Prosím zadajte čas.', 'error');
-        return;
+    function sendTimeForCity(city) {
+        console.log(`Odosielam čas pre mesto: ${city}`);
+        
+        const buttons = document.querySelectorAll('.city-btn');
+        const clickedButton = Array.from(buttons).find(btn => 
+            btn.textContent.toLowerCase().includes(city.toLowerCase())
+        );
+        
+        if (clickedButton) setButtonLoading(clickedButton, true);
+        
+        fetch(`/send_time/${city}/`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Odpoveď zo servera:', data);
+                const cityName = city.charAt(0).toUpperCase() + city.slice(1);
+                showCustomMessage(`Čas pre mesto ${cityName} bol úspešne synchronizovaný`, 'success');
+                closeModal();
+            })
+            .catch(error => {
+                console.error('Chyba pri odosielaní:', error);
+                showCustomMessage('Synchronizácia času sa nepodarila. Skúste to neskôr.', 'error');
+                closeModal();
+            })
+            .finally(() => {
+                if (clickedButton) setButtonLoading(clickedButton, false);
+            });
     }
 
-    setButtonLoading(button, true);
-
-    fetch(`/send_custom_time/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ time: customTime })
-    })
-    .then(response => {
-        if (!response.ok) {
-            throw new Error('Network response was not ok');
+    // vlastný čas
+    function sendCustomTime() {
+        const customTime = document.getElementById("customTime").value;
+        const button = document.querySelector('#timeModal .btn-primary');
+        if (!customTime) {
+            showCustomMessage('Prosím zadajte čas.', 'error');
+            return;
         }
-        return response.json();
-    })
-    .then(data => {
-        
-        showCustomMessage('Vlastný čas bol úspešne nastavený', 'success');
-        closeModal();
-    })
-    .catch(error => {
-        console.error('Chyba:', error);
-        showCustomMessage('Vlastný čas bol úspešne nastavený', 'success');
-        closeModal();
-    })
-    .finally(() => {
-        setButtonLoading(button, false);
-    });
-}
 
+        setButtonLoading(button, true);
 
-document.addEventListener('DOMContentLoaded', function() {
-    
-    const errorElements = document.querySelectorAll('.errorlist, .error, .alert-error, .django-error, .messages .error, .messages .warning');
-    errorElements.forEach(element => {
-        element.style.display = 'none';
+        fetch(`/send_custom_time/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ time: customTime })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+            showCustomMessage('Vlastný čas bol úspešne nastavený', 'success');
+            closeModal();
+        })
+        .catch(error => {
+            console.error('Chyba:', error);
+            showCustomMessage('Vlastný čas bol úspešne nastavený', 'success');
+            closeModal();
+        })
+        .finally(() => {
+            setButtonLoading(button, false);
+        });
+    }
+
+    // errory
+    document.addEventListener('DOMContentLoaded', function() {
+        const errorElements = document.querySelectorAll('.errorlist, .error, .alert-error, .django-error, .messages .error, .messages .warning');
+        errorElements.forEach(element => {
+            element.style.display = 'none';
+        });
+        const bodyErrors = document.querySelectorAll('body > .error, body > .errorlist, body > .alert, body > .messages');
+        bodyErrors.forEach(element => {
+            element.style.display = 'none';
+        });
     });
-    
-    
-    const bodyErrors = document.querySelectorAll('body > .error, body > .errorlist, body > .alert, body > .messages');
-    bodyErrors.forEach(element => {
-        element.style.display = 'none';
-    });
-});
-</script>
+    </script>
 </body>
 </html>
